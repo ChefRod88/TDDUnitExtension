@@ -1,0 +1,13 @@
+<Commands>
+    <CommandTable>
+        <Commands>
+            <Command guid="your-guid-here" id="0x0100" />
+        </Commands>
+        <Menus>
+            <Menu guid="guidCommandsPackageCmdSet" id="0x1000" type="Toolbar" />
+        </Menus>
+        <KeyBindings>
+            <KeyBinding guid="your-guid-here" id="0x0100" editor="guidVSStd97" key1="F12" />
+        </KeyBindings>
+    </CommandTable>
+</Commands>
