@@ -1,4 +1,4 @@
-using System;
+uusing System;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -7,85 +7,107 @@ using Microsoft.VisualStudio.Shell;
 
 namespace TDDUnitTestExtension
 {
-	internal sealed class GenerateAndRunUnitTestsCommand
-	{
-		public const int CommandId = 0x0100;
-		public static readonly Guid CommandSet = new Guid("your-guid-here");
-		private readonly Package _package;
+    internal sealed class GenerateAndRunUnitTestsCommand
+    {
+        public const int CommandId = 0x0100;
+        public static readonly Guid CommandSet = new Guid("your-guid-here");
+        private readonly Package _package;
 
-		private GenerateAndRunUnitTestsCommand(Package package)
-		{
-			_package = package ?? throw new ArgumentNullException(nameof(package));
+        // Constructor to initialize the command with the given package
+        private GenerateAndRunUnitTestsCommand(Package package)
+        {
+            _package = package ?? throw new ArgumentNullException(nameof(package));
 
-			var commandService = ServiceProvider.GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
-			commandService?.AddCommand(new MenuCommand(Execute, new CommandID(CommandSet, CommandId)));
-		}
+            // Adding the command to the command service
+            var commandService = ServiceProvider.GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
+            commandService?.AddCommand(new MenuCommand(Execute, new CommandID(CommandSet, CommandId)));
+        }
 
-		public static GenerateAndRunUnitTestsCommand Instance { get; private set; }
-		private IServiceProvider ServiceProvider => _package;
+        // Singleton instance of the command
+        public static GenerateAndRunUnitTestsCommand Instance { get; private set; }
 
-		public static void Initialize(Package package) => Instance = new GenerateAndRunUnitTestsCommand(package);
+        // Provides access to the service provider
+        private IServiceProvider ServiceProvider => _package;
 
-		private void Execute(object sender, EventArgs e)
-		{
-			var dte = ServiceProvider.GetService(typeof(DTE)) as DTE;
-			if (dte?.ActiveDocument?.Selection is TextSelection textSelection)
-			{
-				var caretText = textSelection.Text.Trim();
-				Log($"Caret is on: {caretText}");
+        // Initializes the command
+        public static void Initialize(Package package) => Instance = new GenerateAndRunUnitTestsCommand(package);
 
-				if (string.IsNullOrWhiteSpace(caretText) || caretText != "test")
-				{
-					Log("Caret is not on a valid `test` annotation.");
-					throw new InvalidOperationException("Caret is not on a valid `test` annotation.");
-				}
-			}
-			else
-			{
-				Log("Unable to retrieve text selection.");
-				throw new InvalidOperationException("Unable to retrieve text selection.");
-			}
+        // Executes the command when triggered
+        private void Execute(object sender, EventArgs e)
+        {
+            var dte = ServiceProvider.GetService(typeof(DTE)) as DTE;
+            if (dte?.ActiveDocument?.Selection is TextSelection textSelection)
+            {
+                var caretText = textSelection.Text.Trim();
+                Log($"Caret is on: {caretText}");
 
+                // Checks if the caret is on a valid `[Test]` annotation
+                if (string.IsNullOrWhiteSpace(caretText) || caretText != "[Test]")
+                {
+                    Log("Caret is not on a valid `[Test]` annotation.");
+                    throw new InvalidOperationException("Caret is not on a valid `[Test]` annotation.");
+                }
 
+                // Retrieves the code from the active document
+                var code = dte.ActiveDocument?.GetText();
+                if (code == null)
+                {
+                    Log("Unable to retrieve code.");
+                    throw new InvalidOperationException("Unable to retrieve code.");
+                }
 
-		private void GenerateAndRunTests(string code)
-		{
-			var methodsToTest = ExtractMethodsWithTestAnnotation(code);
+                // Generates and runs the tests for the annotated methods
+                GenerateAndRunTests(code);
+            }
+            else
+            {
+                Log("Unable to retrieve text selection.");
+                throw new InvalidOperationException("Unable to retrieve text selection.");
+            }
+        }
 
-			if (methodsToTest.Length == 0)
-			{
-				Log("No methods found with the `test` annotation.");
-				throw new InvalidOperationException("No methods found with the `test` annotation.");
-			}
+        // Generates and runs unit tests for methods with the `[Test]` annotation
+        private void GenerateAndRunTests(string code)
+        {
+            var methodsToTest = ExtractMethodsWithTestAnnotation(code);
 
-			foreach (var method in methodsToTest)
-			{
-				Log($"Found method to test: {method}");
-				var testCode = GenerateUnitTestCode(method);
-				WriteTestToFile(testCode);
-				RunTests();
-			}
-		}
+            if (methodsToTest.Length == 0)
+            {
+                Log("No methods found with the `[Test]` annotation.");
+                throw new InvalidOperationException("No methods found with the `[Test]` annotation.");
+            }
 
+            foreach (var method in methodsToTest)
+            {
+                Log($"Found method to test: {method}");
+                var testCode = GenerateUnitTestCode(method);
+                WriteTestToFile(testCode);
+                RunTests();
+            }
+        }
 
-		private static string[] ExtractMethodsWithTestAnnotation(string code)
-		{
-			Log("Extracting methods annotated with `test`...");
-			var methodRegex = new Regex(@"^\s*test\s*$\s*(public|private|protected|internal)\s+\w+\s+\w+\(.*?\)\s*{", RegexOptions.Multiline);
+        // Extracts methods annotated with the `[Test]` attribute from the given code
+        private static string[] ExtractMethodsWithTestAnnotation(string code)
+        {
+            Log("Extracting methods annotated with `[Test]`...");
+            var methodRegex = new Regex(@"
 
-			var matches = methodRegex.Matches(code);
-			var methods = matches.Cast<Match>().Select(m => m.Value).ToArray();
+\[\s*Test\s*]\s*(public|private|protected|internal)\s+\w+\s+\w+\(.*?\)\s*{", RegexOptions.Multiline);
 
-			Log($"{methods.Length} method(s) found with `test` annotation.");
-			return methods;
-		}
+            var matches = methodRegex.Matches(code);
+            var methods = matches.Cast<Match>().Select(m => m.Value).ToArray();
 
-		private static string GenerateUnitTestCode(string method)
-		{
-			Log($"Generating test for method: {method}");
-			var methodName = Regex.Match(method, @"\w+\(")?.Value.Trim('(') ?? "UnknownMethod";
+            Log($"{methods.Length} method(s) found with `[Test]` annotation.");
+            return methods;
+        }
 
-			return $@"
+        // Generates unit test code for the given method
+        private static string GenerateUnitTestCode(string method)
+        {
+            Log($"Generating test for method: {method}");
+            var methodName = Regex.Match(method, @"\w+\(")?.Value.Trim('(') ?? "UnknownMethod";
+
+            return $@"
 using Xunit;
 
 public class {methodName}Tests
@@ -103,48 +125,50 @@ public class {methodName}Tests
         Assert.NotNull(result);
     }}
 }}";
-		}
+        }
 
+        // Writes the generated test code to a file
+        private static void WriteTestToFile(string testCode)
+        {
+            var testFilePath = Path.Combine(Directory.GetCurrentDirectory(), "GeneratedTests.cs");
+            File.WriteAllText(testFilePath, testCode);
 
-		private static void WriteTestToFile(string testCode)
-		{
-			var testFilePath = Path.Combine(Directory.GetCurrentDirectory(), "GeneratedTests.cs");
-			File.WriteAllText(testFilePath, testCode);
+            Log($"Test code written to file: {testFilePath}");
+        }
 
-			Log($"Test code written to file: {testFilePath}");
-		}
+        // Runs the generated tests using `dotnet test`
+        private static void RunTests()
+        {
+            Log("Running tests using `dotnet test`...");
+            using var process = new System.Diagnostics.Process
+            {
+                StartInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "dotnet",
+                    Arguments = "test",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
 
-		private static void RunTests()
-		{
-			Log("Running tests using `dotnet test`...");
-			using var process = new System.Diagnostics.Process
-			{
-				StartInfo = new System.Diagnostics.ProcessStartInfo
-				{
-					FileName = "dotnet",
-					Arguments = "test",
-					RedirectStandardOutput = true,
-					UseShellExecute = false,
-					CreateNoWindow = true
-				}
-			};
+            process.Start();
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
 
-			process.Start();
-			var output = process.StandardOutput.ReadToEnd();
-			process.WaitForExit();
+            Log("Test execution completed.");
+            Log("Test Output:");
+            Log(output);
+        }
 
-			Log("Test execution completed.");
-			Log("Test Output:");
-			Log(output);
-		}
-
-		private static void Log(string message)
-		{
-			var logFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "ExtensionLog.txt");
-			File.AppendAllText(logFilePath, $"{DateTime.Now}: {message}{Environment.NewLine}");
-		}
-
-	}
+        // Logs messages to a file
+        private static void Log(string message)
+        {
+            var logFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "ExtensionLog.txt");
+            File.AppendAllText(logFilePath, $"{DateTime.Now}: {message}{Environment.NewLine}");
+        }
+    }
 }
+
 
 
